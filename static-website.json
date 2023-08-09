@@ -1,0 +1,116 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Static Website",
+    "Resources": {
+        "ResponseHeadersPolicy" : {
+            "Type" : "AWS::CloudFront::ResponseHeadersPolicy",
+            "Properties" : {
+                "ResponseHeadersPolicyConfig" : {
+                    "Name" : { "Ref" : "AWS::StackName"},
+                    "SecurityHeadersConfig": {
+                        "XSSProtection": {
+                            "Override": false,
+                            "Protection": true,
+                            "ModeBlock": false
+                        },
+                        "FrameOptions": {
+                            "Override": true,
+                            "FrameOption": "SAMEORIGIN"
+                        },
+                        "ReferrerPolicy": {
+                            "Override": true,
+                            "ReferrerPolicy": "strict-origin-when-cross-origin"
+                        },
+                        "ContentSecurityPolicy": {
+                            "Override": false,
+                            "ContentSecurityPolicy": "script-src 'self' https://www.googletagmanager.com https://ajax.googleapis.com https://cdn.jsdelivr.net https://unpkg.com/mermaid@8.8.0/dist/mermaid.min.js"
+                        },
+                        "ContentTypeOptions": {
+                            "Override": false
+                        },
+                        "StrictTransportSecurity": {
+                            "Override": false,
+                            "IncludeSubdomains": false,
+                            "Preload": false,
+                            "AccessControlMaxAgeSec": 31536000
+                        }
+                    },
+                    "CustomHeadersConfig": {
+                        "Items": [
+                            {
+                                "Header": "Permissions-Policy",
+                                "Value": "fullscreen=(self)",
+                                "Override": false
+                            }
+                        ]
+                    }
+                }
+                
+
+             
+
+            }
+        },
+        "S3Bucket": {
+            "Type": "AWS::S3::Bucket"
+        },
+        "S3BucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": { "Ref": "S3Bucket" },
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "CanonicalUser": { "Fn::GetAtt" : [ "cloudfrontoriginaccessidentity", "S3CanonicalUserId" ] } },
+                            "Action": "s3:GetObject",
+                            "Resource": { "Fn::Sub" : "arn:aws:s3:::${S3Bucket}/*" }
+                        }
+                    ]
+                }
+            }
+        },
+        "cloudfrontoriginaccessidentity": {
+            "Type": "AWS::CloudFront::CloudFrontOriginAccessIdentity",
+            "Properties" : {
+                "CloudFrontOriginAccessIdentityConfig" : {
+                    "Comment" : { "Ref" : "AWS::StackName"}
+                }
+            }
+        },
+        "cloudfrontdistribution": {
+            "Type": "AWS::CloudFront::Distribution",
+            "Properties": {
+                
+                "DistributionConfig" : {
+                    "Origins" : [{
+                        "DomainName" : { "Fn::Sub" : "${S3Bucket}.s3.${AWS::Region}.amazonaws.com" },
+                        "Id" : { "Ref" : "S3Bucket" },
+                        "S3OriginConfig": {
+                            "OriginAccessIdentity": { "Fn::Sub" : "origin-access-identity/cloudfront/${cloudfrontoriginaccessidentity}" }
+                        }
+                    }],
+                    "IPV6Enabled"   : true,
+                    "PriceClass": "PriceClass_200",
+                    "Enabled" : true,
+                    "DefaultRootObject": "index.html",
+                    "DefaultCacheBehavior" : {
+                        "ForwardedValues" : {
+                            "QueryString" : false
+                        },
+                        "ViewerProtocolPolicy": "redirect-to-https",
+                        "TargetOriginId" : { "Ref" : "S3Bucket" },
+                        "ResponseHeadersPolicyId" : { "Ref" : "ResponseHeadersPolicy" }
+                    }
+                }
+            }
+        }
+    },
+    "Outputs" : {
+        "CloudFront" : {
+            "Value" : { "Fn::GetAtt" : [ "cloudfrontdistribution", "DomainName" ] }
+        }
+    }
+}
